@@ -12,6 +12,8 @@ import torch.utils.data
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import torchvision.utils as vutils
 
+from tqdm import tqdm
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -135,7 +137,7 @@ def train(opt):
     best_norm_ED = -1
     iteration = start_iter
 
-    while(True):
+    for iteration in tqdm(range(start_iter, opt.num_iter)):
         # train part
         image_tensors, labels = iter(train_dataloader).next()
         image = image_tensors.to(device)
