@@ -1,3 +1,8 @@
+### Dataset
+340 000 image subset of MJSynth dataset.
+https://drive.google.com/file/d/1AdDqu4j7RIxcg5ridRcr3qL74viJiX7B/view?usp=sharing
+
+
 ### Train
 
 ViTSTR-Tiny without data augmentation 
