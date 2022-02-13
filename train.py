@@ -215,7 +215,6 @@ def train(opt):
         if (iteration + 1) == opt.num_iter:
             print('end the training')
             sys.exit()
-        iteration += 1
         if scheduler is not None:
             scheduler.step()
 
