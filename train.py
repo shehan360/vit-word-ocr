@@ -10,10 +10,12 @@ import torch.backends.cudnn as cudnn
 import torch.optim as optim
 import torch.utils.data
 from torch.optim.lr_scheduler import CosineAnnealingLR
+import torchvision.utils as vutils
 
 import numpy as np
+import matplotlib.pyplot as plt
 
-from dataset import hierarchical_dataset, AlignCollate, Batch_Balanced_Dataset
+from dataset import AlignCollate, RawDataset
 from model import Model
 from test import validation
 from utils import get_args
@@ -25,20 +27,41 @@ def train(opt):
     opt.select_data = opt.select_data.split('-')
     opt.batch_ratio = opt.batch_ratio.split('-')
     opt.eval = False
-    train_dataset = Batch_Balanced_Dataset(opt)
+
+    train_dataset = RawDataset(root=opt.train_data, opt=opt)
+    _AlignCollate = AlignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio_with_pad=opt.PAD, opt=opt)
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=opt.batch_size,
+        shuffle=True,
+        num_workers=int(opt.workers),
+        collate_fn=_AlignCollate, pin_memory=True)
+    #train_dataset = Batch_Balanced_Dataset(opt)
+
+    # Plot some training images
+    image_tensors, labels = iter(train_dataloader).next()
+    plt.figure(figsize=(8, 8))
+    plt.axis("off")
+    plt.title("Training Images")
+    plt.imshow(
+        np.transpose(vutils.make_grid(image_tensors.to(device)[:64], padding=2, normalize=True).cpu(), (1, 2, 0)))
+    plt.show()
+    print("Labels:")
+    print(labels[:64])
 
     log = open(f'./saved_models/{opt.exp_name}/log_dataset.txt', 'a')
     opt.eval = True
     if opt.sensitive:
         opt.data_filtering_off = True
     AlignCollate_valid = AlignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio_with_pad=opt.PAD, opt=opt)
-    valid_dataset, valid_dataset_log = hierarchical_dataset(root=opt.valid_data, opt=opt)
+    # valid_dataset, valid_dataset_log = hierarchical_dataset(root=opt.valid_data, opt=opt)
+    valid_dataset = RawDataset(root=opt.valid_data, opt=opt)
+
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset, batch_size=opt.batch_size,
         shuffle=True,  # 'True' to check training progress with validation function.
         num_workers=int(opt.workers),
         collate_fn=AlignCollate_valid, pin_memory=True)
-    log.write(valid_dataset_log)
+    # log.write(valid_dataset_log)
     print('-' * 80)
     log.write('-' * 80 + '\n')
     log.close()
@@ -114,7 +137,7 @@ def train(opt):
 
     while(True):
         # train part
-        image_tensors, labels = train_dataset.get_batch()
+        image_tensors, labels = iter(train_dataloader).next()
         image = image_tensors.to(device)
 
         batch_size = image.size(0)
