@@ -33,11 +33,12 @@ def validation(model, criterion, evaluation_loader, converter, opt):
 
         start_time = time.time()
 
-        preds = model(image, text=target, seqlen=converter.batch_max_length)
+        preds = model(image, seqlen=converter.batch_max_length)
         _, preds_index = preds.topk(1, dim=-1, largest=True, sorted=True)
         preds_index = preds_index.view(-1, converter.batch_max_length)
         forward_time = time.time() - start_time
-        cost = criterion(preds.contiguous().view(-1, preds.shape[-1]), target.contiguous().view(-1))
+        cost = criterion(preds.view(preds.shape[0], preds.shape[2], preds.shape[1]),
+                         target.view(target.shape[0], target.shape[2], target.shape[1]))
 
         length_for_pred = torch.IntTensor([converter.batch_max_length - 1] * batch_size).to(device)
         preds_str = converter.decode(preds_index[:, 1:], length_for_pred)

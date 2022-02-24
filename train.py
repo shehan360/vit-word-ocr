@@ -88,7 +88,7 @@ def train(opt):
         else:
             model.load_state_dict(torch.load(opt.saved_model))
 
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=0).to(device)
+    criterion = torch.nn.CrossEntropyLoss().to(device)
 
     # loss averager
     loss_avg = Averager()
@@ -145,8 +145,9 @@ def train(opt):
         batch_size = image.size(0)
 
         target = converter.encode(labels)
-        preds = model(image, text=target, seqlen=converter.batch_max_length)
-        cost = criterion(preds.view(-1, preds.shape[-1]), target.contiguous().view(-1))
+        preds = model(image, seqlen=converter.batch_max_length)
+        cost = criterion(preds.view(preds.shape[0], preds.shape[2], preds.shape[1]),
+                         target.view(target.shape[0], target.shape[2], target.shape[1]))
 
         model.zero_grad()
         cost.backward()
