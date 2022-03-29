@@ -94,6 +94,7 @@ def get_args(is_train=True):
     parser.add_argument('--flops', action='store_true', help='calculates approx flops (may not work)')
 
     # for train
+    parser.add_argument('--num_gpu', help='Number of GPUS. Set 0 if none.', required=is_train, type=int)
     parser.add_argument('--exp_name', help='Where to store logs and models')
     parser.add_argument('--train_data', required=is_train, help='path to training dataset')
     parser.add_argument('--valid_data', required=is_train, help='path to validation dataset')
