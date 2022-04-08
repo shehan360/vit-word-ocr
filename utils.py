@@ -1,5 +1,8 @@
 import torch
 import argparse
+from language_model import AbcdLM
+from language_model import char_to_tensor
+from language_model import all_characters
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -50,6 +53,10 @@ class TokenLabelConverter(object):
 
         self.dict = {word: i for i, word in enumerate(self.character)}
         self.batch_max_length = opt.batch_max_length + len(self.list_token)
+        vocab_size = len(all_characters)
+        self.lang_model = AbcdLM(input_size=vocab_size, hidden_size=100, output_size=vocab_size, n_layers=1)
+        self.lang_model.load_state_dict(torch.load('lm_abcd.pt', map_location=device))
+        self.lang_model_characters = all_characters
 
     def encode(self, text):
         """ convert text-label into text-index.
@@ -59,20 +66,42 @@ class TokenLabelConverter(object):
         for i, t in enumerate(text):
             txt = [self.GO] + list(t) + [self.SPACE]
             txt = [self.dict[char] for char in txt]
-            #prob = np.random.uniform()
-            #mask_len = round(len(list(t)) * 0.15)
-            #if is_train and mask_len > 0:
-            #    for m in range(mask_len):
-            #        index = np.random.randint(1, len(t) + 1)
-            #        prob = np.random.uniform()
-            #        if prob > 0.2:
-            #            text[index] = self.dict[self.MASK]
-            #            batch_weights[i][index] = 1.
-            #        elif prob > 0.1:
-            #            char_index = np.random.randint(len(self.list_token), len(self.character))
-            #            text[index] = self.dict[self.character[char_index]]
-            #            batch_weights[i][index] = 1.
             batch_text[i][:len(txt)] = torch.LongTensor(txt)  # batch_text[:, 0] = [GO] token
+        return batch_text.to(device)
+
+    def lm_encode(self, text, preds):
+        """ convert text-label into text-index.
+        """
+        _, preds_index = preds.topk(1, dim=-1, largest=True, sorted=True)
+        preds_index = preds_index.view(-1, self.batch_max_length)
+        length_for_pred = torch.IntTensor([self.batch_max_length - 1] * preds.size(0)).to(device)
+        pred_strs = self.decode(preds_index[:, 1:], length_for_pred)
+
+        batch_text = torch.FloatTensor(len(text), self.batch_max_length, len(self.character)).fill_(self.dict[self.GO])
+        for i, (t, pred_str) in enumerate(zip(text, pred_strs)):
+            txt = [self.GO] + list(t) + [self.SPACE]
+            for j in range(1, len(txt)):
+                if j == 1:
+                    prev = self.lang_model_characters.index(txt[j]) - 1
+                    prev_char = self.lang_model_characters[prev]
+                    inp = char_to_tensor(prev_char)
+                    hidden = self.lang_model.init_hidden()
+                    output, hidden = self.lang_model(inp, hidden)
+                    softmax_out = torch.nn.functional.softmax(output)
+                    start_idx = self.dict[self.lang_model_characters[0]]
+                    end_idx = self.dict[self.lang_model_characters[-1]] + 1
+                    batch_text[i][1][start_idx:end_idx] = softmax_out
+                elif j == len(txt) - 1:
+                    batch_text[i][j][self.dict[self.SPACE]] = 1
+                else:
+                    vision_pred = pred_str[j-2]
+                    inp = char_to_tensor(vision_pred)
+                    output, hidden = self.lang_model(inp, hidden)
+                    softmax_out = torch.nn.functional.softmax(output)
+                    start_idx = self.dict[self.lang_model_characters[0]]
+                    end_idx = self.dict[self.lang_model_characters[-1]] + 1
+                    batch_text[i][j][start_idx:end_idx] = softmax_out
+
         return batch_text.to(device)
 
     def decode(self, text_index, length):
