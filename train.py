@@ -232,7 +232,7 @@ if __name__ == '__main__':
 
     """ vocab / character number configuration """
     if opt.sensitive:
-        opt.character = string.printable[:-6]  # same with ASTER setting (use 94 char).
+        opt.character = string.printable[:62]  # same with ASTER setting (use 94 char).
 
     """ Seed and GPU setting """
     random.seed(opt.manualSeed)
