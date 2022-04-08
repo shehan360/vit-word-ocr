@@ -145,7 +145,7 @@ def train(opt):
         batch_size = image.size(0)
 
         target = converter.encode(labels)
-        preds = model(image, text=target, seqlen=converter.batch_max_length)
+        preds = model(image, seqlen=converter.batch_max_length)
         cost = criterion(preds.view(-1, preds.shape[-1]), target.contiguous().view(-1))
 
         model.zero_grad()
