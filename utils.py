@@ -88,7 +88,7 @@ class TokenLabelConverter(object):
                     inp = char_to_tensor(prev_char)
                     hidden = self.lang_model.init_hidden()
                     output, hidden = self.lang_model(inp, hidden)
-                    softmax_out = torch.nn.functional.softmax(output)
+                    softmax_out = torch.nn.functional.softmax(output, dim=1)
                     start_idx = self.dict[self.lang_model_characters[0]]
                     end_idx = self.dict[self.lang_model_characters[-1]] + 1
                     batch_text[i][1][start_idx:end_idx] = softmax_out
