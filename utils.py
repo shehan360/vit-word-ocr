@@ -102,7 +102,8 @@ class TokenLabelConverter(object):
                         last_vision_pred = pred_str[j-3]
                         inp = char_to_tensor(last_vision_pred)
                     elif vision_pred_greater_than_target:
-                        output_dist = output.data.view(-1).div(temperature=0.8).exp()
+                        # temperature 0.8
+                        output_dist = output.data.view(-1).div(0.8).exp()
                         top_i = torch.multinomial(output_dist, 1)[0]
                         # Add predicted character to string and use as next input
                         predicted_char = all_characters[top_i]
