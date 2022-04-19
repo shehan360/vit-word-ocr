@@ -97,18 +97,8 @@ class TokenLabelConverter(object):
                         if vision_pred not in self.lang_model_characters and not vision_pred_greater_than_target:
                             # this means the prediction string is smaller than the target str
                             vision_pred_greater_than_target = True
-                            # temperature 0.8
-                            output_dist = output.data.view(-1).div(0.8).exp()
-                            top_i = torch.multinomial(output_dist, 1)[0]
-                            # Add predicted character to string and use as next input
-                            predicted_char = self.lang_model_characters[top_i]
                             inp = char_to_tensor(predicted_char)
                         elif vision_pred_greater_than_target:
-                            # temperature 0.8
-                            output_dist = output.data.view(-1).div(0.8).exp()
-                            top_i = torch.multinomial(output_dist, 1)[0]
-                            # Add predicted character to string and use as next input
-                            predicted_char = self.lang_model_characters[top_i]
                             inp = char_to_tensor(predicted_char)
                         else:
                             inp = char_to_tensor(vision_pred)
@@ -123,6 +113,8 @@ class TokenLabelConverter(object):
                         predicted_char = self.lang_model_characters[top_i]
 
                         if predicted_char == self.SPACE:
+                            inp = char_to_tensor(" ")
+                            output, self.hidden = self.lang_model(inp, self.hidden)
                             break
 
 
