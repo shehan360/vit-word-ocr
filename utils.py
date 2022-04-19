@@ -57,7 +57,7 @@ class TokenLabelConverter(object):
         self.lang_model = ShakespereLM(input_size=vocab_size, hidden_size=100, output_size=vocab_size, n_layers=5)
         self.lang_model.load_state_dict(torch.load('lm_shakespere_best.pt', map_location=device))
         self.hidden = self.lang_model.init_hidden()
-        self.lang_model_characters = all_characters
+        self.lang_model_characters = all_characters.copy()
         self.lang_model_characters[0] = self.SPACE
         self.lang_model.eval()
 
