@@ -59,6 +59,7 @@ class TokenLabelConverter(object):
         self.hidden = self.lang_model.init_hidden()
         self.lang_model_characters = all_characters
         self.lang_model_characters[0] = self.SPACE
+        self.lang_model.eval()
 
     def encode(self, text):
         """ convert text-label into text-index.
@@ -74,41 +75,42 @@ class TokenLabelConverter(object):
     def lm_encode(self, text, preds):
         """ convert text-label into text-index.
         """
-        _, preds_index = preds.topk(1, dim=-1, largest=True, sorted=True)
-        preds_index = preds_index.view(-1, self.batch_max_length)
-        length_for_pred = torch.IntTensor([self.batch_max_length - 1] * preds.size(0)).to(device)
-        pred_strs = self.decode(preds_index[:, 1:], length_for_pred)
+        with torch.no_grad():
+            _, preds_index = preds.topk(1, dim=-1, largest=True, sorted=True)
+            preds_index = preds_index.view(-1, self.batch_max_length)
+            length_for_pred = torch.IntTensor([self.batch_max_length - 1] * preds.size(0)).to(device)
+            pred_strs = self.decode(preds_index[:, 1:], length_for_pred)
 
-        batch_text = torch.FloatTensor(len(text), self.batch_max_length, len(self.character)).fill_(self.dict[self.GO])
-        for i, (t, pred_str) in enumerate(zip(text, pred_strs)):
-            txt = [self.GO] + list(t) + [self.SPACE]
-            vision_pred_greater_than_target = False
-            for j in range(1, len(txt)):
-                if j == 1:
-                    batch_text[i][1][self.dict[txt[j]]] = 1
-                elif j == len(txt) - 1:
-                    batch_text[i][j][self.dict[self.SPACE]] = 1
-                else:
-                    vision_pred = pred_str[j-2]
-                    if vision_pred not in self.lang_model_characters and not vision_pred_greater_than_target:
-                        # this means the prediction string is smaller than the target str
-                        vision_pred_greater_than_target = True
-                        last_vision_pred = pred_str[j-3]
-                        inp = char_to_tensor(last_vision_pred)
-                    elif vision_pred_greater_than_target:
-                        # temperature 0.8
-                        output_dist = output.data.view(-1).div(0.8).exp()
-                        top_i = torch.multinomial(output_dist, 1)[0]
-                        # Add predicted character to string and use as next input
-                        predicted_char = all_characters[top_i]
-                        inp = char_to_tensor(predicted_char)
+            batch_text = torch.FloatTensor(len(text), self.batch_max_length, len(self.character)).fill_(self.dict[self.GO])
+            for i, (t, pred_str) in enumerate(zip(text, pred_strs)):
+                txt = [self.GO] + list(t) + [self.SPACE]
+                vision_pred_greater_than_target = False
+                for j in range(1, len(txt)):
+                    if j == 1:
+                        batch_text[i][1][self.dict[txt[j]]] = 1
+                    elif j == len(txt) - 1:
+                        batch_text[i][j][self.dict[self.SPACE]] = 1
                     else:
-                        inp = char_to_tensor(vision_pred)
-                    output, self.hidden = self.lang_model(inp, self.hidden)
-                    softmax_out = torch.nn.functional.softmax(output, dim=1)
-                    start_idx = self.dict[self.lang_model_characters[0]]
-                    end_idx = self.dict[self.lang_model_characters[-1]] + 1
-                    batch_text[i][j][start_idx:end_idx] = softmax_out
+                        vision_pred = pred_str[j-2]
+                        if vision_pred not in self.lang_model_characters and not vision_pred_greater_than_target:
+                            # this means the prediction string is smaller than the target str
+                            vision_pred_greater_than_target = True
+                            last_vision_pred = pred_str[j-3]
+                            inp = char_to_tensor(last_vision_pred)
+                        elif vision_pred_greater_than_target:
+                            # temperature 0.8
+                            output_dist = output.data.view(-1).div(0.8).exp()
+                            top_i = torch.multinomial(output_dist, 1)[0]
+                            # Add predicted character to string and use as next input
+                            predicted_char = all_characters[top_i]
+                            inp = char_to_tensor(predicted_char)
+                        else:
+                            inp = char_to_tensor(vision_pred)
+                        output, self.hidden = self.lang_model(inp, self.hidden)
+                        softmax_out = torch.nn.functional.softmax(output, dim=1)
+                        start_idx = self.dict[self.lang_model_characters[0]]
+                        end_idx = self.dict[self.lang_model_characters[-1]] + 1
+                        batch_text[i][j][start_idx:end_idx] = softmax_out
 
         return batch_text.to(device)
 
