@@ -61,6 +61,9 @@ class TokenLabelConverter(object):
         self.lang_model_characters[0] = self.SPACE
         self.lang_model.eval()
 
+    def init_hidden(self):
+        self.hidden = self.lang_model.init_hidden()
+
     def encode(self, text):
         """ convert text-label into text-index.
         """
