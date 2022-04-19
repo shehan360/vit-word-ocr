@@ -90,19 +90,25 @@ class TokenLabelConverter(object):
                         batch_text[i][1][self.dict[txt[j]]] = 1
                     elif j == len(txt) - 1:
                         batch_text[i][j][self.dict[self.SPACE]] = 1
+                        inp = char_to_tensor(" ")
+                        output, self.hidden = self.lang_model(inp, self.hidden)
                     else:
                         vision_pred = pred_str[j-2]
                         if vision_pred not in self.lang_model_characters and not vision_pred_greater_than_target:
                             # this means the prediction string is smaller than the target str
                             vision_pred_greater_than_target = True
-                            last_vision_pred = pred_str[j-3]
-                            inp = char_to_tensor(last_vision_pred)
+                            # temperature 0.8
+                            output_dist = output.data.view(-1).div(0.8).exp()
+                            top_i = torch.multinomial(output_dist, 1)[0]
+                            # Add predicted character to string and use as next input
+                            predicted_char = self.lang_model_characters[top_i]
+                            inp = char_to_tensor(predicted_char)
                         elif vision_pred_greater_than_target:
                             # temperature 0.8
                             output_dist = output.data.view(-1).div(0.8).exp()
                             top_i = torch.multinomial(output_dist, 1)[0]
                             # Add predicted character to string and use as next input
-                            predicted_char = all_characters[top_i]
+                            predicted_char = self.lang_model_characters[top_i]
                             inp = char_to_tensor(predicted_char)
                         else:
                             inp = char_to_tensor(vision_pred)
@@ -111,6 +117,14 @@ class TokenLabelConverter(object):
                         start_idx = self.dict[self.lang_model_characters[0]]
                         end_idx = self.dict[self.lang_model_characters[-1]] + 1
                         batch_text[i][j][start_idx:end_idx] = softmax_out
+
+                        output_dist = output.data.view(-1).div(0.8).exp()
+                        top_i = torch.multinomial(output_dist, 1)[0]
+                        predicted_char = self.lang_model_characters[top_i]
+
+                        if predicted_char == self.SPACE:
+                            break
+
 
         return batch_text.to(device)
 
