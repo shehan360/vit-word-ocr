@@ -4,13 +4,12 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import time, math
+import unidecode
+from tqdm import tqdm
 
-all_characters = string.printable[:62]
+all_characters = [" "]
+all_characters.extend(string.printable[:62])
 n_characters = len(all_characters)
-chunk_len = 6
-
-data = string.printable[:62]
-print(data)
 
 
 def time_since(since):
@@ -20,18 +19,19 @@ def time_since(since):
     return '%dm %ds' % (m, s)
 
 def random_chunk():
-    start_index = random.randint(0, len(data) - 1)
-    if start_index > len(data) - chunk_len:
-        rem = start_index + chunk_len - len(data)
-        return data[start_index:len(data)] + data[:rem]
-    end_index = start_index + chunk_len
-    return data[start_index:end_index]
+    start_index = random.randint(0, file_len - chunk_len)
+    end_index = start_index + chunk_len + 1
+    str = ''
+    for char in file[start_index:end_index]:
+        if char not in all_characters and char != " ":
+            continue
+        else:
+            str += char
+    return str
 
-print(random_chunk())
-
-class AbcdLM(nn.Module):
+class ShakespereLM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, n_layers=1):
-        super(AbcdLM, self).__init__()
+        super(ShakespereLM, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -58,7 +58,6 @@ def char_to_tensor(string):
         tensor[c] = all_characters.index(string[c])
     return Variable(tensor)
 
-print(char_to_tensor('abc'))
 
 def random_training_set():
     chunk = random_chunk()
@@ -90,12 +89,12 @@ def evaluate(prime_str='A', predict_len=100, temperature=0.8):
 
     return predicted
 
-def train(inp, target):
+def train_step(inp, target):
     hidden = decoder.init_hidden()
     decoder.zero_grad()
     loss = 0
 
-    for c in range(chunk_len - 1):
+    for c in range(len(inp) - 1):
         output, hidden = decoder(inp[c], hidden)
         loss += criterion(output, torch.unsqueeze(target[c], dim=0))
 
@@ -104,34 +103,58 @@ def train(inp, target):
 
     return loss.item() / chunk_len
 
-print(random_training_set())
 
-n_epochs = 500
-print_every = 100
-plot_every = 10
-hidden_size = 100
-n_layers = 1
-lr = 0.005
+if __name__ == '__main__':
 
-decoder = AbcdLM(n_characters, hidden_size, n_characters, n_layers)
-decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=lr)
-criterion = nn.CrossEntropyLoss()
+    chunk_len = 200
 
-start = time.time()
-all_losses = []
-loss_avg = 0
+    file = unidecode.unidecode(open('/Users/shehan360/PycharmProjects/vit-ocr/shakespeare_ocr/_corpora/completeworks.txt').read())
+    print("File length before processing:", len(file))
 
-for epoch in range(1, n_epochs + 1):
-    loss = train(*random_training_set())
-    loss_avg += loss
+    str = ''
+    # pre process data
+    for char in " ".join(file.split()):
+        if char not in all_characters and char != " ":
+            continue
+        else:
+            str += char
+    file = str
+    file_len = len(file)
 
-    if epoch % print_every == 0:
-        print('[%s (%d %d%%) %.4f]' % (time_since(start), epoch, epoch / n_epochs * 100, loss))
-        print(evaluate('g', 100), '\n')
+    print("File length after processing:", file_len)
 
-    if epoch % plot_every == 0:
-        all_losses.append(loss_avg / plot_every)
-        loss_avg = 0
-evaluate('g', 100)
-torch.save(decoder.state_dict(), 'lm_abcd.pt')
+    print(random_chunk())
 
+    n_iterations = 50000
+    print_every = 1000
+    plot_every = 1000
+    hidden_size = 100
+    n_layers = 5
+    lr = 0.005
+
+    decoder = ShakespereLM(n_characters, hidden_size, n_characters, n_layers)
+    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+
+    start = time.time()
+    all_losses = []
+    loss_avg = 0
+    best_loss = float('inf')
+    for iteration in tqdm(range(1, n_iterations)):
+        loss = train_step(*random_training_set())
+        loss_avg += loss
+
+        if iteration % print_every == 0:
+            print('[%s (%d %d%%) %.4f]' % (time_since(start), iteration, iteration / n_iterations * 100, loss))
+            print(evaluate('T', 100), '\n')
+            if loss_avg / plot_every < best_loss:
+                best_loss = loss_avg / plot_every
+                torch.save(decoder.state_dict(), 'lm_shakespere_best.pt')
+
+        if iteration % plot_every == 0:
+            print("Loss:", loss_avg / plot_every)
+            all_losses.append(loss_avg / plot_every)
+            loss_avg = 0
+
+    evaluate('Th', 100)
+    torch.save(decoder.state_dict(), 'lm_shakespere.pt')

@@ -35,7 +35,7 @@ def align(opt):
     _AlignCollate = AlignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio_with_pad=opt.PAD, opt=opt)
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=opt.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=int(opt.workers),
         collate_fn=_AlignCollate, pin_memory=False)
     # train_dataset = Batch_Balanced_Dataset(opt)
@@ -61,7 +61,7 @@ def align(opt):
 
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset, batch_size=opt.batch_size,
-        shuffle=True,  # 'True' to check training progress with validation function.
+        shuffle=False,  # 'True' to check training progress with validation function.
         num_workers=int(opt.workers),
         collate_fn=AlignCollate_valid, pin_memory=False)
     # log.write(valid_dataset_log)
@@ -140,21 +140,22 @@ def align(opt):
 
     for iteration in tqdm(range(start_iter, opt.num_iter)):
         # train part
-        image_tensors, labels = iter(train_dataloader).next()
-        image = image_tensors.to(device)
+        if iteration != start_iter:
+            image_tensors, labels = iter(train_dataloader).next()
+            image = image_tensors.to(device)
 
-        batch_size = image.size(0)
+            batch_size = image.size(0)
 
-        preds = model(image, seqlen=converter.batch_max_length)
-        target = converter.lm_encode(labels, preds)
-        cost = criterion(preds.view(preds.shape[0], preds.shape[2], preds.shape[1]),
-                         target.view(target.shape[0], target.shape[2], target.shape[1]))
-        model.zero_grad()
-        cost.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)  # gradient clipping with 5 (Default)
-        optimizer.step()
+            preds = model(image, seqlen=converter.batch_max_length)
+            target = converter.lm_encode(labels, preds)
+            cost = criterion(preds.view(preds.shape[0], preds.shape[2], preds.shape[1]),
+                             target.view(target.shape[0], target.shape[2], target.shape[1]))
+            model.zero_grad()
+            cost.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)  # gradient clipping with 5 (Default)
+            optimizer.step()
 
-        loss_avg.add(cost)
+            loss_avg.add(cost)
 
         # validation part
         if (iteration) % opt.valInterval == 0 or iteration == 0:  # To see training progress, we also conduct validation when 'iteration == 0'

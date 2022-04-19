@@ -1,6 +1,6 @@
 import torch
 import argparse
-from language_model import AbcdLM
+from language_model import ShakespereLM
 from language_model import char_to_tensor
 from language_model import all_characters
 
@@ -54,9 +54,11 @@ class TokenLabelConverter(object):
         self.dict = {word: i for i, word in enumerate(self.character)}
         self.batch_max_length = opt.batch_max_length + len(self.list_token)
         vocab_size = len(all_characters)
-        self.lang_model = AbcdLM(input_size=vocab_size, hidden_size=100, output_size=vocab_size, n_layers=1)
-        self.lang_model.load_state_dict(torch.load('lm_abcd.pt', map_location=device))
+        self.lang_model = ShakespereLM(input_size=vocab_size, hidden_size=100, output_size=vocab_size, n_layers=5)
+        self.lang_model.load_state_dict(torch.load('lm_shakespere_best.pt', map_location=device))
+        self.hidden = self.lang_model.init_hidden()
         self.lang_model_characters = all_characters
+        self.lang_model_characters[0] = self.SPACE
 
     def encode(self, text):
         """ convert text-label into text-index.
@@ -83,15 +85,7 @@ class TokenLabelConverter(object):
             vision_pred_greater_than_target = False
             for j in range(1, len(txt)):
                 if j == 1:
-                    prev = self.lang_model_characters.index(txt[j]) - 1
-                    prev_char = self.lang_model_characters[prev]
-                    inp = char_to_tensor(prev_char)
-                    hidden = self.lang_model.init_hidden()
-                    output, hidden = self.lang_model(inp, hidden)
-                    softmax_out = torch.nn.functional.softmax(output, dim=1)
-                    start_idx = self.dict[self.lang_model_characters[0]]
-                    end_idx = self.dict[self.lang_model_characters[-1]] + 1
-                    batch_text[i][1][start_idx:end_idx] = softmax_out
+                    batch_text[i][1][self.dict[txt[j]]] = 1
                 elif j == len(txt) - 1:
                     batch_text[i][j][self.dict[self.SPACE]] = 1
                 else:
@@ -110,7 +104,7 @@ class TokenLabelConverter(object):
                         inp = char_to_tensor(predicted_char)
                     else:
                         inp = char_to_tensor(vision_pred)
-                    output, hidden = self.lang_model(inp, hidden)
+                    output, self.hidden = self.lang_model(inp, self.hidden)
                     softmax_out = torch.nn.functional.softmax(output, dim=1)
                     start_idx = self.dict[self.lang_model_characters[0]]
                     end_idx = self.dict[self.lang_model_characters[-1]] + 1
